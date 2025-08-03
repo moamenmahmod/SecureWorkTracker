@@ -16,17 +16,17 @@ Preferred communication style: Simple, everyday language.
 - **Responsive Design**: Mobile-first approach using Bootstrap grid system
 
 ## Backend Architecture
-- **Framework**: Flask with minimal configuration for rapid development
-- **Data Storage**: In-memory data structures with thread-safe operations using Python's threading.Lock
+- **Framework**: Flask with SQLAlchemy ORM for database operations
+- **Database**: PostgreSQL with SQLAlchemy models for persistent data storage
 - **Session Management**: Flask sessions with configurable secret key from environment variables
 - **Time Management**: Cairo timezone integration using World Time API with UTC+2 fallback
 - **Activity Tracking**: 5-minute interval monitoring system for automatic work time calculation
 
-## Data Models
-- **Challenges**: Core entity containing days, target money, target vulnerabilities, and timestamps
-- **Work Sessions**: Time tracking data linked to specific challenges and dates
-- **Vulnerabilities**: Bug reports with severity levels, company information, and bounty amounts
-- **Activity Logs**: Granular tracking of user interactions for work time calculation
+## Data Models (PostgreSQL)
+- **Challenge**: Core entity with days, target money, target vulnerabilities, timestamps, and active status
+- **WorkSession**: Time tracking data with unique constraint per challenge/date, stores minutes and activity timestamps
+- **Vulnerability**: Bug reports with severity levels, company information, bounty amounts, and descriptions
+- **ActivityLog**: Granular tracking of user interactions with JSON metadata support for work time calculation
 
 ## Security Considerations
 - **Proxy Support**: ProxyFix middleware for handling reverse proxy headers
@@ -53,4 +53,14 @@ Preferred communication style: Simple, everyday language.
 - **Requests**: HTTP library for external API integration
 - **Logging**: Python's built-in logging for debugging and monitoring
 
-Note: The application currently uses in-memory storage but is architecturally prepared for database integration (MongoDB as specified in project requirements).
+## Database Integration
+- **PostgreSQL**: Production-ready database with full ACID compliance
+- **SQLAlchemy ORM**: Provides database abstraction and relationship management
+- **Migration Support**: Database schema changes tracked through SQLAlchemy models
+- **Data Persistence**: All challenge data, work sessions, and vulnerabilities permanently stored
+
+## Recent Updates (2025-08-03)
+- **Database Migration**: Successfully migrated from in-memory storage to PostgreSQL
+- **Enhanced Data Models**: Added proper relationships, constraints, and indexes
+- **Improved Reliability**: Application now maintains data across server restarts
+- **Better Performance**: Database queries optimized for analytics and reporting features

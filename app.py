@@ -1,10 +1,11 @@
 import os
 import logging
 import requests
-from datetime import datetime, timedelta
-from threading import Lock
+from datetime import datetime, timedelta, date
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from werkzeug.middleware.proxy_fix import ProxyFix
+from sqlalchemy.exc import IntegrityError
+from models import db, Challenge, WorkSession, Vulnerability, ActivityLog
 
 # Configure logging
 logging.basicConfig(level=logging.DEBUG)
@@ -14,15 +15,20 @@ app = Flask(__name__)
 app.secret_key = os.environ.get("SESSION_SECRET", "cybersec-tracker-dev-key")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
-# In-memory data storage
-data_lock = Lock()
-app_data = {
-    'challenges': [],
-    'work_sessions': [],
-    'vulnerabilities': [],
-    'activity_logs': [],
-    'current_challenge_id': None
+# Configure the database
+app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_recycle": 300,
+    "pool_pre_ping": True,
 }
+app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+# Initialize the database
+db.init_app(app)
+
+# Create tables
+with app.app_context():
+    db.create_all()
 
 def get_cairo_time():
     """Get current Cairo time from World Time API"""
@@ -46,11 +52,8 @@ def get_cairo_time():
 @app.route('/')
 def index():
     """Home page with challenge creation"""
-    with data_lock:
-        challenges = app_data['challenges']
-        current_challenge = None
-        if app_data['current_challenge_id']:
-            current_challenge = next((c for c in challenges if c['id'] == app_data['current_challenge_id']), None)
+    challenges = Challenge.query.order_by(Challenge.created_at.desc()).all()
+    current_challenge = Challenge.query.filter_by(is_active=True).first()
     
     return render_template('index.html', challenges=challenges, current_challenge=current_challenge)
 
@@ -68,29 +71,28 @@ def create_challenge():
         
         cairo_time = get_cairo_time()
         
-        challenge = {
-            'id': len(app_data['challenges']) + 1,
-            'days': days,
-            'target_money': float(target_money) if target_money else None,
-            'target_vulns': int(target_vulns) if target_vulns else None,
-            'start_time': cairo_time,
-            'end_time': cairo_time + timedelta(days=days),
-            'created_at': cairo_time,
-            'is_active': True
-        }
+        # Deactivate other challenges
+        Challenge.query.filter_by(is_active=True).update({'is_active': False})
         
-        with data_lock:
-            # Deactivate other challenges
-            for c in app_data['challenges']:
-                c['is_active'] = False
-            
-            app_data['challenges'].append(challenge)
-            app_data['current_challenge_id'] = challenge['id']
+        # Create new challenge
+        challenge = Challenge(
+            days=days,
+            target_money=float(target_money) if target_money else None,
+            target_vulns=int(target_vulns) if target_vulns else None,
+            start_time=cairo_time,
+            end_time=cairo_time + timedelta(days=days),
+            created_at=cairo_time,
+            is_active=True
+        )
+        
+        db.session.add(challenge)
+        db.session.commit()
         
         flash('Challenge created successfully!', 'success')
-        return redirect(url_for('challenge_page', challenge_id=challenge['id']))
+        return redirect(url_for('challenge_page', challenge_id=challenge.id))
         
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error creating challenge: {e}")
         flash('Error creating challenge', 'error')
         return redirect(url_for('index'))
@@ -98,27 +100,22 @@ def create_challenge():
 @app.route('/challenge/<int:challenge_id>')
 def challenge_page(challenge_id):
     """Challenge tracking page"""
-    with data_lock:
-        challenge = next((c for c in app_data['challenges'] if c['id'] == challenge_id), None)
-        if not challenge:
-            flash('Challenge not found', 'error')
-            return redirect(url_for('index'))
-        
-        # Get vulnerabilities for this challenge
-        vulns = [v for v in app_data['vulnerabilities'] if v.get('challenge_id') == challenge_id]
-        
-        # Calculate earnings
-        total_earned = sum(v.get('bounty', 0) for v in vulns)
-        
-        # Get today's work time
-        today = get_cairo_time().date()
-        today_sessions = [s for s in app_data['work_sessions'] 
-                         if s.get('challenge_id') == challenge_id and s.get('date') == today]
-        today_work_minutes = sum(s.get('minutes', 0) for s in today_sessions)
-        
+    challenge = Challenge.query.get_or_404(challenge_id)
+    
+    # Get vulnerabilities for this challenge
+    vulnerabilities = Vulnerability.query.filter_by(challenge_id=challenge_id).order_by(Vulnerability.created_at.desc()).all()
+    
+    # Calculate earnings
+    total_earned = sum(v.bounty for v in vulnerabilities)
+    
+    # Get today's work time
+    today = get_cairo_time().date()
+    today_session = WorkSession.query.filter_by(challenge_id=challenge_id, date=today).first()
+    today_work_minutes = today_session.minutes if today_session else 0
+    
     return render_template('challenge.html', 
                          challenge=challenge, 
-                         vulnerabilities=vulns,
+                         vulnerabilities=vulnerabilities,
                          total_earned=total_earned,
                          today_work_minutes=today_work_minutes)
 
@@ -137,24 +134,27 @@ def add_vulnerability():
             flash('Title is required', 'error')
             return redirect(url_for('challenge_page', challenge_id=challenge_id))
         
-        vuln = {
-            'id': len(app_data['vulnerabilities']) + 1,
-            'challenge_id': challenge_id,
-            'title': title,
-            'severity': severity,
-            'company': company,
-            'bounty': float(bounty) if bounty else 0,
-            'description': description,
-            'created_at': get_cairo_time()
-        }
+        # Verify challenge exists
+        challenge = Challenge.query.get_or_404(challenge_id)
         
-        with data_lock:
-            app_data['vulnerabilities'].append(vuln)
+        vulnerability = Vulnerability(
+            challenge_id=challenge_id,
+            title=title,
+            severity=severity,
+            company=company,
+            bounty=float(bounty) if bounty else 0,
+            description=description,
+            created_at=get_cairo_time()
+        )
+        
+        db.session.add(vulnerability)
+        db.session.commit()
         
         flash('Vulnerability added successfully!', 'success')
         return redirect(url_for('challenge_page', challenge_id=challenge_id))
         
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error adding vulnerability: {e}")
         flash('Error adding vulnerability', 'error')
         return redirect(url_for('challenge_page', challenge_id=request.form.get('challenge_id', 1)))
@@ -163,23 +163,22 @@ def add_vulnerability():
 def edit_vulnerability(vuln_id):
     """Edit an existing vulnerability"""
     try:
-        with data_lock:
-            vuln = next((v for v in app_data['vulnerabilities'] if v['id'] == vuln_id), None)
-            if not vuln:
-                flash('Vulnerability not found', 'error')
-                return redirect(url_for('index'))
-            
-            vuln['title'] = request.form.get('title', vuln['title'])
-            vuln['severity'] = request.form.get('severity', vuln['severity'])
-            vuln['company'] = request.form.get('company', vuln['company'])
-            vuln['bounty'] = float(request.form.get('bounty', vuln['bounty']))
-            vuln['description'] = request.form.get('description', vuln['description'])
-            vuln['updated_at'] = get_cairo_time()
+        vulnerability = Vulnerability.query.get_or_404(vuln_id)
+        
+        vulnerability.title = request.form.get('title', vulnerability.title)
+        vulnerability.severity = request.form.get('severity', vulnerability.severity)
+        vulnerability.company = request.form.get('company', vulnerability.company)
+        vulnerability.bounty = float(request.form.get('bounty', vulnerability.bounty))
+        vulnerability.description = request.form.get('description', vulnerability.description)
+        vulnerability.updated_at = get_cairo_time()
+        
+        db.session.commit()
         
         flash('Vulnerability updated successfully!', 'success')
-        return redirect(url_for('challenge_page', challenge_id=vuln['challenge_id']))
+        return redirect(url_for('challenge_page', challenge_id=vulnerability.challenge_id))
         
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error editing vulnerability: {e}")
         flash('Error updating vulnerability', 'error')
         return redirect(url_for('index'))
@@ -188,21 +187,20 @@ def edit_vulnerability(vuln_id):
 def delete_vulnerability(vuln_id):
     """Delete a vulnerability"""
     try:
-        with data_lock:
-            vuln = next((v for v in app_data['vulnerabilities'] if v['id'] == vuln_id), None)
-            if vuln:
-                challenge_id = vuln['challenge_id']
-                app_data['vulnerabilities'] = [v for v in app_data['vulnerabilities'] if v['id'] != vuln_id]
-                flash('Vulnerability deleted successfully!', 'success')
-                return redirect(url_for('challenge_page', challenge_id=challenge_id))
-            else:
-                flash('Vulnerability not found', 'error')
+        vulnerability = Vulnerability.query.get_or_404(vuln_id)
+        challenge_id = vulnerability.challenge_id
+        
+        db.session.delete(vulnerability)
+        db.session.commit()
+        
+        flash('Vulnerability deleted successfully!', 'success')
+        return redirect(url_for('challenge_page', challenge_id=challenge_id))
         
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error deleting vulnerability: {e}")
         flash('Error deleting vulnerability', 'error')
-    
-    return redirect(url_for('index'))
+        return redirect(url_for('index'))
 
 @app.route('/log_activity', methods=['POST'])
 def log_activity():
@@ -212,49 +210,53 @@ def log_activity():
         if not challenge_id:
             return jsonify({'error': 'No active challenge'}), 400
         
+        # Verify challenge exists
+        challenge = Challenge.query.get_or_404(challenge_id)
+        
         now = get_cairo_time()
         today = now.date()
         
-        # Add 5 minutes to today's work session
-        with data_lock:
-            # Find or create today's session
-            session = next((s for s in app_data['work_sessions'] 
-                           if s.get('challenge_id') == challenge_id and s.get('date') == today), None)
-            
-            if session:
-                session['minutes'] += 5
-                session['last_activity'] = now
-            else:
-                session = {
-                    'id': len(app_data['work_sessions']) + 1,
-                    'challenge_id': challenge_id,
-                    'date': today,
-                    'minutes': 5,
-                    'last_activity': now
-                }
-                app_data['work_sessions'].append(session)
-            
-            # Log the activity
-            app_data['activity_logs'].append({
-                'id': len(app_data['activity_logs']) + 1,
-                'challenge_id': challenge_id,
-                'timestamp': now,
-                'activity_type': 'work_session'
-            })
+        # Find or create today's work session
+        session = WorkSession.query.filter_by(challenge_id=challenge_id, date=today).first()
         
-        return jsonify({'success': True, 'total_minutes': session['minutes']})
+        if session:
+            session.minutes += 5
+            session.last_activity = now
+            session.updated_at = now
+        else:
+            session = WorkSession(
+                challenge_id=challenge_id,
+                date=today,
+                minutes=5,
+                last_activity=now,
+                created_at=now,
+                updated_at=now
+            )
+            db.session.add(session)
+        
+        # Log the activity
+        activity_log = ActivityLog(
+            challenge_id=challenge_id,
+            timestamp=now,
+            activity_type='work_session'
+        )
+        db.session.add(activity_log)
+        
+        db.session.commit()
+        
+        return jsonify({'success': True, 'total_minutes': session.minutes})
         
     except Exception as e:
+        db.session.rollback()
         logging.error(f"Error logging activity: {e}")
         return jsonify({'error': 'Failed to log activity'}), 500
 
 @app.route('/analytics')
 def analytics():
     """Analytics and reporting page"""
-    with data_lock:
-        challenges = app_data['challenges']
-        work_sessions = app_data['work_sessions']
-        vulnerabilities = app_data['vulnerabilities']
+    challenges = Challenge.query.order_by(Challenge.created_at.desc()).all()
+    work_sessions = WorkSession.query.all()
+    vulnerabilities = Vulnerability.query.all()
     
     return render_template('analytics.html', 
                          challenges=challenges,
@@ -264,29 +266,31 @@ def analytics():
 @app.route('/api/analytics_data/<int:challenge_id>')
 def get_analytics_data(challenge_id):
     """Get analytics data for charts"""
-    with data_lock:
-        # Work sessions data
-        sessions = [s for s in app_data['work_sessions'] if s.get('challenge_id') == challenge_id]
-        
-        # Vulnerabilities data
-        vulns = [v for v in app_data['vulnerabilities'] if v.get('challenge_id') == challenge_id]
-        
-        # Daily work hours
-        daily_work = {}
-        for session in sessions:
-            date_str = session['date'].strftime('%Y-%m-%d')
-            daily_work[date_str] = session['minutes'] / 60  # Convert to hours
-        
-        # Vulnerability severity breakdown
-        severity_counts = {'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0}
-        daily_earnings = {}
-        
-        for vuln in vulns:
-            severity_counts[vuln['severity']] += 1
-            date_str = vuln['created_at'].strftime('%Y-%m-%d')
-            if date_str not in daily_earnings:
-                daily_earnings[date_str] = 0
-            daily_earnings[date_str] += vuln.get('bounty', 0)
+    # Verify challenge exists
+    challenge = Challenge.query.get_or_404(challenge_id)
+    
+    # Work sessions data
+    sessions = WorkSession.query.filter_by(challenge_id=challenge_id).all()
+    
+    # Vulnerabilities data
+    vulnerabilities = Vulnerability.query.filter_by(challenge_id=challenge_id).all()
+    
+    # Daily work hours
+    daily_work = {}
+    for session in sessions:
+        date_str = session.date.strftime('%Y-%m-%d')
+        daily_work[date_str] = session.minutes / 60  # Convert to hours
+    
+    # Vulnerability severity breakdown
+    severity_counts = {'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0}
+    daily_earnings = {}
+    
+    for vuln in vulnerabilities:
+        severity_counts[vuln.severity] += 1
+        date_str = vuln.created_at.strftime('%Y-%m-%d')
+        if date_str not in daily_earnings:
+            daily_earnings[date_str] = 0
+        daily_earnings[date_str] += vuln.bounty
     
     return jsonify({
         'daily_work': daily_work,
