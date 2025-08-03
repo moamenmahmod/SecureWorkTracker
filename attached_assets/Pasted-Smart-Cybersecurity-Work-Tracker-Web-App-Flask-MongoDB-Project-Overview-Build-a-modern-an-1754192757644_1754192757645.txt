@@ -1,0 +1,74 @@
+Smart Cybersecurity Work Tracker Web App (Flask + MongoDB)
+🧠 Project Overview:
+Build a modern, animated, cybersecurity-themed web application using Flask (Python) for the backend, MongoDB for the database, and HTML/CSS/JavaScript for the frontend.
+The application’s purpose is to track personal bug bounty challenges, including daily work time, earned money, and discovered vulnerabilities. It will support timers, progress analytics, automated activity tracking, and historical data visualizations.
+⚙️ Tech Stack:
+* Backend: Flask (Python)
+* Frontend: HTML5, CSS3 (with modern styling & animations), JavaScript
+* Database: MongoDB
+* Extras: External API for real-time Cairo time, optional charting library (e.g., Chart.js), toast notifications
+🧩 Core Functionalities:
+1. Home Page
+* Option to create a new challenge.
+* Challenge fields:
+   * Required: Number of days
+   * Optional: Target money to earn, number of vulnerabilities to find
+2. Challenge Page (After Creation)
+⏱️ Challenge Countdown
+* Display total time remaining (days/hours/minutes/seconds) until the challenge ends.
+* Display current day countdown (hours/minutes/seconds left in the current day).
+* Challenge start time must be synced with current Cairo, Egypt time using a free time API and saved in MongoDB.
+📊 Challenge Progress Bar
+* Visual progress bar based on elapsed vs. total challenge days.
+* Day count should automatically increment based on real-world date.
+⏲️ Time Tracking (Automatic)
+* Every 5 minutes, track if user was active (keyboard or mouse activity).
+* If active in the interval, add 5 minutes to the daily work time counter.
+* If not active, discard the interval.
+* Total daily work time should persist until the day ends, even if the timer is stopped.
+📈 Work Analytics
+* Show charts/graphs of:
+   * Daily hours worked
+   * Weekly, monthly, yearly productivity
+   * Compare previous day/week with current to highlight productivity improvements
+   * Toasts or badges to highlight milestones or progress streaks
+3. Money Tracker Section
+* Fields:
+   * Target earning goal (optional)
+   * Total earned (calculated from vulnerability entries)
+   * Remaining to reach goal
+* Visual analytics:
+   * Graphs of daily/weekly/monthly earnings
+   * Bar chart or donut chart of total vs. goal
+* Include history of bug bounties earned
+4. Vulnerabilities Section
+* Fields for each vulnerability:
+   * Severity: Critical, High, Medium, Low
+   * Company name
+   * Bounty earned
+   * Title (required)
+   * Bug report text (optional)
+* Calculations:
+   * Vulnerabilities goal (optional)
+   * Found vs. goal vs. remaining
+   * Severity breakdown analytics
+* Historical record of vulnerabilities added
+🗃️ Database (MongoDB):
+Store and persist all relevant data:
+* Challenges (start time, goals, timer states)
+* Daily work tracking records
+* Bounties (money earned, company, severity)
+* Vulnerabilities and reports
+* Analytics data (daily/hourly logs)
+💅 UI/UX Design:
+* Modern and responsive UI
+* Cybersecurity theme (dark mode, neon accents, terminal-style fonts or cards)
+* Smooth transitions, toast notifications, interactive charts, and modals
+* Intuitive navigation between dashboard, challenge, and analytics
+📦 Enhancements:
+* add edit option to the challenge and vulns and money to edit anything made by wrong
+* Notification system (reminders to work or praise when progress is made)
+* Manual pause/resume button for tracking
+📍 APIs:
+* Use a free API like http://worldtimeapi.org/api/timezone/Africa/Cairo to get and store real-time Egypt time when a challenge is created.
+
