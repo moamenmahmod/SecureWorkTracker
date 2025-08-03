@@ -16,7 +16,13 @@ app.secret_key = os.environ.get("SESSION_SECRET", "cybersec-tracker-dev-key")
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 
 # Configure the database
-app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+# Use local SQLite database for localhost, PostgreSQL for Replit
+if os.environ.get("DATABASE_URL"):
+    # Running on Replit - use PostgreSQL
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ.get("DATABASE_URL")
+else:
+    # Running locally - use SQLite
+    app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///cybersec_tracker.db"
 app.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
     "pool_recycle": 300,
     "pool_pre_ping": True,
