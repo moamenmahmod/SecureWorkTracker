@@ -54,13 +54,14 @@ Preferred communication style: Simple, everyday language.
 - **Logging**: Python's built-in logging for debugging and monitoring
 
 ## Database Integration
-- **PostgreSQL**: Production-ready database with full ACID compliance
+- **SQLite**: Local file-based database for standalone deployment
 - **SQLAlchemy ORM**: Provides database abstraction and relationship management
-- **Migration Support**: Database schema changes tracked through SQLAlchemy models
-- **Data Persistence**: All challenge data, work sessions, and vulnerabilities permanently stored
+- **Automatic Setup**: Database and tables created automatically on first run
+- **Data Persistence**: All challenge data, work sessions, and vulnerabilities stored in cybersec_tracker.db file
 
 ## Recent Updates (2025-08-03)
-- **Database Migration**: Successfully migrated from in-memory storage to PostgreSQL
-- **Enhanced Data Models**: Added proper relationships, constraints, and indexes
-- **Improved Reliability**: Application now maintains data across server restarts
-- **Better Performance**: Database queries optimized for analytics and reporting features
+- **Local Development Configuration**: Removed all Replit environment dependencies
+- **SQLite Database**: Configured for local file storage (cybersec_tracker.db)
+- **Simplified Setup**: Created run.py and README.md for easy local deployment
+- **Environment Independence**: Application now runs standalone on localhost
+- **Removed Dependencies**: Eliminated ProxyFix middleware and environment variable requirements
