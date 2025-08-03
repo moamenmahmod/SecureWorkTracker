@@ -1,0 +1,176 @@
+{% extends "base.html" %}
+
+{% block title %}Dashboard - CyberSec Work Tracker{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Create Challenge Card -->
+    <div class="col-lg-6 mb-4">
+        <div class="card cyber-card h-100">
+            <div class="card-header cyber-card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-plus-circle text-neon-green"></i>
+                    Create New Challenge
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('create_challenge') }}">
+                    <div class="mb-3">
+                        <label for="days" class="form-label">
+                            <i class="fas fa-calendar-alt"></i> Number of Days *
+                        </label>
+                        <input type="number" class="form-control cyber-input" id="days" name="days" required min="1" max="365" placeholder="e.g., 30">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="target_money" class="form-label">
+                            <i class="fas fa-dollar-sign"></i> Target Money (USD)
+                        </label>
+                        <input type="number" class="form-control cyber-input" id="target_money" name="target_money" step="0.01" placeholder="e.g., 5000.00">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="target_vulns" class="form-label">
+                            <i class="fas fa-bug"></i> Target Vulnerabilities
+                        </label>
+                        <input type="number" class="form-control cyber-input" id="target_vulns" name="target_vulns" min="1" placeholder="e.g., 10">
+                    </div>
+                    
+                    <button type="submit" class="btn cyber-btn-primary w-100">
+                        <i class="fas fa-rocket"></i> Launch Challenge
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Current Challenge Status -->
+    <div class="col-lg-6 mb-4">
+        <div class="card cyber-card h-100">
+            <div class="card-header cyber-card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-trophy text-neon-blue"></i>
+                    Current Challenge
+                </h5>
+            </div>
+            <div class="card-body">
+                {% if current_challenge %}
+                    <div class="challenge-status">
+                        <div class="mb-3">
+                            <h6 class="text-neon-green">Active Challenge</h6>
+                            <p class="mb-1">
+                                <i class="fas fa-calendar"></i>
+                                Duration: <span class="fw-bold">{{ current_challenge.days }} days</span>
+                            </p>
+                            <p class="mb-1">
+                                <i class="fas fa-clock"></i>
+                                Started: <span class="fw-bold">{{ current_challenge.start_time.strftime('%Y-%m-%d %H:%M') }}</span>
+                            </p>
+                        </div>
+                        
+                        {% if current_challenge.target_money %}
+                        <div class="mb-2">
+                            <i class="fas fa-bullseye text-neon-blue"></i>
+                            Money Goal: <span class="text-neon-green">${{ "%.2f"|format(current_challenge.target_money) }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        {% if current_challenge.target_vulns %}
+                        <div class="mb-3">
+                            <i class="fas fa-target text-neon-blue"></i>
+                            Vuln Goal: <span class="text-neon-green">{{ current_challenge.target_vulns }}</span>
+                        </div>
+                        {% endif %}
+                        
+                        <a href="{{ url_for('challenge_page', challenge_id=current_challenge.id) }}" class="btn cyber-btn-secondary w-100">
+                            <i class="fas fa-arrow-right"></i> Enter Challenge
+                        </a>
+                    </div>
+                {% else %}
+                    <div class="text-center py-4">
+                        <i class="fas fa-exclamation-circle fa-3x text-muted mb-3"></i>
+                        <h6 class="text-muted">No Active Challenge</h6>
+                        <p class="text-muted small">Create a new challenge to start tracking your bug bounty journey!</p>
+                    </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Previous Challenges -->
+{% if challenges %}
+<div class="row">
+    <div class="col-12">
+        <div class="card cyber-card">
+            <div class="card-header cyber-card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-history text-neon-purple"></i>
+                    Challenge History
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover cyber-table">
+                        <thead>
+                            <tr>
+                                <th><i class="fas fa-hashtag"></i> ID</th>
+                                <th><i class="fas fa-calendar"></i> Duration</th>
+                                <th><i class="fas fa-play"></i> Start Date</th>
+                                <th><i class="fas fa-stop"></i> End Date</th>
+                                <th><i class="fas fa-dollar-sign"></i> Target Money</th>
+                                <th><i class="fas fa-bug"></i> Target Vulns</th>
+                                <th><i class="fas fa-info-circle"></i> Status</th>
+                                <th><i class="fas fa-cog"></i> Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for challenge in challenges %}
+                            <tr>
+                                <td>{{ challenge.id }}</td>
+                                <td>{{ challenge.days }} days</td>
+                                <td>{{ challenge.start_time.strftime('%Y-%m-%d') }}</td>
+                                <td>{{ challenge.end_time.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    {% if challenge.target_money %}
+                                        ${{ "%.2f"|format(challenge.target_money) }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if challenge.target_vulns %}
+                                        {{ challenge.target_vulns }}
+                                    {% else %}
+                                        <span class="text-muted">-</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    {% if challenge.is_active %}
+                                        <span class="badge bg-success">
+                                            <i class="fas fa-play"></i> Active
+                                        </span>
+                                    {% else %}
+                                        <span class="badge bg-secondary">
+                                            <i class="fas fa-stop"></i> Completed
+                                        </span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{{ url_for('challenge_page', challenge_id=challenge.id) }}" 
+                                       class="btn btn-sm cyber-btn-outline">
+                                        <i class="fas fa-eye"></i> View
+                                    </a>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% endblock %}

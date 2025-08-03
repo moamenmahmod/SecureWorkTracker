@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+
+{% block title %}Challenge #{{ challenge.id }} - CyberSec Work Tracker{% endblock %}
+
+{% block head %}
+<meta name="challenge-id" content="{{ challenge.id }}">
+{% endblock %}
+
+{% block content %}
+<!-- Challenge Header -->
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card cyber-card">
+            <div class="card-header cyber-card-header">
+                <div class="d-flex justify-content-between align-items-center">
+                    <h4 class="mb-0">
+                        <i class="fas fa-shield-alt text-neon-green"></i>
+                        Challenge #{{ challenge.id }}
+                    </h4>
+                    <div class="challenge-timers">
+                        <div class="timer-display" id="challenge-countdown">
+                            <i class="fas fa-clock text-neon-blue"></i>
+                            <span id="challenge-time">Loading...</span>
+                        </div>
+                        <div class="timer-display" id="daily-countdown">
+                            <i class="fas fa-calendar-day text-neon-purple"></i>
+                            <span id="daily-time">Loading...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="progress-section">
+                            <h6 class="text-neon-blue">Challenge Progress</h6>
+                            <div class="progress cyber-progress mb-2">
+                                <div class="progress-bar" id="challenge-progress-bar" role="progressbar" style="width: 0%"></div>
+                            </div>
+                            <small class="text-muted" id="progress-text">Day 1 of {{ challenge.days }}</small>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="work-time-section">
+                            <h6 class="text-neon-green">Today's Work Time</h6>
+                            <div class="work-stats">
+                                <span class="work-time-display" id="today-work-time">
+                                    {{ "%.1f"|format(today_work_minutes / 60) }} hours
+                                </span>
+                                <div class="activity-status" id="activity-status">
+                                    <i class="fas fa-circle text-muted"></i>
+                                    <span>Monitoring...</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row">
+    <!-- Money Tracker -->
+    <div class="col-lg-4 mb-4">
+        <div class="card cyber-card h-100">
+            <div class="card-header cyber-card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-dollar-sign text-neon-green"></i>
+                    Money Tracker
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="stats-display">
+                    <div class="stat-item">
+                        <span class="stat-label">Total Earned</span>
+                        <span class="stat-value text-neon-green">${{ "%.2f"|format(total_earned) }}</span>
+                    </div>
+                    
+                    {% if challenge.target_money %}
+                    <div class="stat-item">
+                        <span class="stat-label">Target Goal</span>
+                        <span class="stat-value">${{ "%.2f"|format(challenge.target_money) }}</span>
+                    </div>
+                    
+                    <div class="stat-item">
+                        <span class="stat-label">Remaining</span>
+                        <span class="stat-value text-neon-blue">
+                            ${{ "%.2f"|format(challenge.target_money - total_earned) }}
+                        </span>
+                    </div>
+                    
+                    <div class="progress cyber-progress mt-3">
+                        <div class="progress-bar bg-success" 
+                             style="width: {{ ((total_earned / challenge.target_money) * 100) if challenge.target_money > 0 else 0 }}%">
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Vulnerability Stats -->
+    <div class="col-lg-4 mb-4">
+        <div class="card cyber-card h-100">
+            <div class="card-header cyber-card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-bug text-neon-red"></i>
+                    Vulnerabilities
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="stats-display">
+                    <div class="stat-item">
+                        <span class="stat-label">Total Found</span>
+                        <span class="stat-value text-neon-red">{{ vulnerabilities|length }}</span>
+                    </div>
+                    
+                    {% if challenge.target_vulns %}
+                    <div class="stat-item">
+                        <span class="stat-label">Target Goal</span>
+                        <span class="stat-value">{{ challenge.target_vulns }}</span>
+                    </div>
+                    
+                    <div class="stat-item">
+                        <span class="stat-label">Remaining</span>
+                        <span class="stat-value text-neon-blue">
+                            {{ challenge.target_vulns - vulnerabilities|length }}
+                        </span>
+                    </div>
+                    
+                    <div class="progress cyber-progress mt-3">
+                        <div class="progress-bar bg-danger" 
+                             style="width: {{ ((vulnerabilities|length / challenge.target_vulns) * 100) if challenge.target_vulns > 0 else 0 }}%">
+                        </div>
+                    </div>
+                    {% endif %}
+                </div>
+                
+                <!-- Severity Breakdown -->
+                <div class="severity-breakdown mt-3">
+                    <h6 class="text-muted small">Severity Breakdown</h6>
+                    {% set severity_counts = {'Critical': 0, 'High': 0, 'Medium': 0, 'Low': 0} %}
+                    {% for vuln in vulnerabilities %}
+                        {% if severity_counts.update({vuln.severity: severity_counts[vuln.severity] + 1}) %}{% endif %}
+                    {% endfor %}
+                    
+                    <div class="severity-stats">
+                        <div class="severity-item">
+                            <span class="badge bg-danger">Critical</span>
+                            <span>{{ severity_counts['Critical'] }}</span>
+                        </div>
+                        <div class="severity-item">
+                            <span class="badge bg-warning">High</span>
+                            <span>{{ severity_counts['High'] }}</span>
+                        </div>
+                        <div class="severity-item">
+                            <span class="badge bg-info">Medium</span>
+                            <span>{{ severity_counts['Medium'] }}</span>
+                        </div>
+                        <div class="severity-item">
+                            <span class="badge bg-secondary">Low</span>
+                            <span>{{ severity_counts['Low'] }}</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Vulnerability -->
+    <div class="col-lg-4 mb-4">
+        <div class="card cyber-card h-100">
+            <div class="card-header cyber-card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-plus text-neon-green"></i>
+                    Add Vulnerability
+                </h5>
+            </div>
+            <div class="card-body">
+                <form method="POST" action="{{ url_for('add_vulnerability') }}">
+                    <input type="hidden" name="challenge_id" value="{{ challenge.id }}">
+                    
+                    <div class="mb-3">
+                        <label for="title" class="form-label">Title *</label>
+                        <input type="text" class="form-control cyber-input" id="title" name="title" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="severity" class="form-label">Severity *</label>
+                        <select class="form-select cyber-input" id="severity" name="severity" required>
+                            <option value="Critical">Critical</option>
+                            <option value="High">High</option>
+                            <option value="Medium" selected>Medium</option>
+                            <option value="Low">Low</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="company" class="form-label">Company</label>
+                        <input type="text" class="form-control cyber-input" id="company" name="company">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="bounty" class="form-label">Bounty ($)</label>
+                        <input type="number" class="form-control cyber-input" id="bounty" name="bounty" step="0.01">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="description" class="form-label">Description</label>
+                        <textarea class="form-control cyber-input" id="description" name="description" rows="3"></textarea>
+                    </div>
+                    
+                    <button type="submit" class="btn cyber-btn-primary w-100">
+                        <i class="fas fa-plus"></i> Add Vulnerability
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Vulnerabilities List -->
+{% if vulnerabilities %}
+<div class="row">
+    <div class="col-12">
+        <div class="card cyber-card">
+            <div class="card-header cyber-card-header">
+                <h5 class="mb-0">
+                    <i class="fas fa-list text-neon-purple"></i>
+                    Vulnerability Reports
+                </h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-dark table-hover cyber-table">
+                        <thead>
+                            <tr>
+                                <th>Title</th>
+                                <th>Severity</th>
+                                <th>Company</th>
+                                <th>Bounty</th>
+                                <th>Date</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for vuln in vulnerabilities %}
+                            <tr>
+                                <td>{{ vuln.title }}</td>
+                                <td>
+                                    <span class="badge bg-{{ 'danger' if vuln.severity == 'Critical' else 'warning' if vuln.severity == 'High' else 'info' if vuln.severity == 'Medium' else 'secondary' }}">
+                                        {{ vuln.severity }}
+                                    </span>
+                                </td>
+                                <td>{{ vuln.company or '-' }}</td>
+                                <td>${{ "%.2f"|format(vuln.bounty) }}</td>
+                                <td>{{ vuln.created_at.strftime('%Y-%m-%d') }}</td>
+                                <td>
+                                    <button class="btn btn-sm cyber-btn-outline" onclick="editVulnerability({{ vuln.id|tojson }})">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <form method="POST" action="{{ url_for('delete_vulnerability', vuln_id=vuln.id) }}" class="d-inline">
+                                        <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('Delete this vulnerability?')">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endif %}
+
+<!-- Edit Vulnerability Modal -->
+<div class="modal fade" id="editVulnModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content bg-dark">
+            <div class="modal-header cyber-card-header">
+                <h5 class="modal-title">Edit Vulnerability</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+            </div>
+            <form id="editVulnForm" method="POST">
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label for="edit-title" class="form-label">Title *</label>
+                        <input type="text" class="form-control cyber-input" id="edit-title" name="title" required>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit-severity" class="form-label">Severity *</label>
+                        <select class="form-select cyber-input" id="edit-severity" name="severity" required>
+                            <option value="Critical">Critical</option>
+                            <option value="High">High</option>
+                            <option value="Medium">Medium</option>
+                            <option value="Low">Low</option>
+                        </select>
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit-company" class="form-label">Company</label>
+                        <input type="text" class="form-control cyber-input" id="edit-company" name="company">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit-bounty" class="form-label">Bounty ($)</label>
+                        <input type="number" class="form-control cyber-input" id="edit-bounty" name="bounty" step="0.01">
+                    </div>
+                    
+                    <div class="mb-3">
+                        <label for="edit-description" class="form-label">Description</label>
+                        <textarea class="form-control cyber-input" id="edit-description" name="description" rows="3"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn cyber-btn-primary">Update Vulnerability</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/activity-tracker.js') }}"></script>
+<script>
+// Challenge countdown timers
+function updateCountdowns() {
+    const startTime = new Date('{{ challenge.start_time.isoformat() }}');
+    const endTime = new Date('{{ challenge.end_time.isoformat() }}');
+    const now = new Date();
+    
+    // Challenge countdown
+    const totalMs = endTime - now;
+    if (totalMs > 0) {
+        const days = Math.floor(totalMs / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((totalMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((totalMs % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((totalMs % (1000 * 60)) / 1000);
+        
+        document.getElementById('challenge-time').textContent = 
+            `${days}d ${hours}h ${minutes}m ${seconds}s`;
+    } else {
+        document.getElementById('challenge-time').textContent = 'Challenge Complete!';
+    }
+    
+    // Daily countdown (until midnight)
+    const tomorrow = new Date(now);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    tomorrow.setHours(0, 0, 0, 0);
+    
+    const dailyMs = tomorrow - now;
+    const dailyHours = Math.floor(dailyMs / (1000 * 60 * 60));
+    const dailyMinutes = Math.floor((dailyMs % (1000 * 60 * 60)) / (1000 * 60));
+    const dailySeconds = Math.floor((dailyMs % (1000 * 60)) / 1000);
+    
+    document.getElementById('daily-time').textContent = 
+        `${dailyHours}h ${dailyMinutes}m ${dailySeconds}s`;
+    
+    // Update progress
+    const totalDays = {{ challenge.days }};
+    const elapsedMs = now - startTime;
+    const elapsedDays = elapsedMs / (1000 * 60 * 60 * 24);
+    const progressPercent = Math.min((elapsedDays / totalDays) * 100, 100);
+    
+    document.getElementById('challenge-progress-bar').style.width = progressPercent + '%';
+    document.getElementById('progress-text').textContent = 
+        `Day ${Math.ceil(elapsedDays)} of ${totalDays}`;
+}
+
+// Edit vulnerability function
+function editVulnerability(vulnData) {
+    document.getElementById('edit-title').value = vulnData.title;
+    document.getElementById('edit-severity').value = vulnData.severity;
+    document.getElementById('edit-company').value = vulnData.company || '';
+    document.getElementById('edit-bounty').value = vulnData.bounty || '';
+    document.getElementById('edit-description').value = vulnData.description || '';
+    
+    document.getElementById('editVulnForm').action = `/edit_vulnerability/${vulnData.id}`;
+    
+    new bootstrap.Modal(document.getElementById('editVulnModal')).show();
+}
+
+// Store vulnerability data for editing
+const vulnerabilities = {{ vulnerabilities|tojson }};
+
+window.editVulnerability = function(vulnId) {
+    const vuln = vulnerabilities.find(v => v.id === vulnId);
+    if (vuln) {
+        editVulnerability(vuln);
+    }
+};
+
+// Initialize
+setInterval(updateCountdowns, 1000);
+updateCountdowns();
+
+// Initialize activity tracker
+if (typeof ActivityTracker !== 'undefined') {
+    const tracker = new ActivityTracker({{ challenge.id }});
+    tracker.start();
+}
+</script>
+{% endblock %}

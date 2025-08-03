@@ -1,0 +1,426 @@
+{% extends "base.html" %}
+
+{% block title %}Analytics - CyberSec Work Tracker{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <div class="card cyber-card">
+            <div class="card-header cyber-card-header">
+                <h4 class="mb-0">
+                    <i class="fas fa-chart-line text-neon-blue"></i>
+                    Analytics Dashboard
+                </h4>
+            </div>
+            <div class="card-body">
+                {% if challenges %}
+                <div class="mb-3">
+                    <label for="challengeSelect" class="form-label">Select Challenge:</label>
+                    <select class="form-select cyber-input" id="challengeSelect" onchange="loadAnalytics()">
+                        <option value="">Choose a challenge...</option>
+                        {% for challenge in challenges %}
+                        <option value="{{ challenge.id }}">
+                            Challenge #{{ challenge.id }} ({{ challenge.start_time.strftime('%Y-%m-%d') }})
+                        </option>
+                        {% endfor %}
+                    </select>
+                </div>
+                {% else %}
+                <div class="text-center py-5">
+                    <i class="fas fa-chart-line fa-3x text-muted mb-3"></i>
+                    <h5 class="text-muted">No Data Available</h5>
+                    <p class="text-muted">Create a challenge and start working to see analytics!</p>
+                    <a href="{{ url_for('index') }}" class="btn cyber-btn-primary">
+                        <i class="fas fa-plus"></i> Create Challenge
+                    </a>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div id="analytics-content" style="display: none;">
+    <!-- Overview Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3 mb-3">
+            <div class="card cyber-card">
+                <div class="card-body text-center">
+                    <div class="stat-icon">
+                        <i class="fas fa-clock fa-2x text-neon-blue"></i>
+                    </div>
+                    <h5 class="mt-3 mb-1" id="total-work-hours">0</h5>
+                    <p class="text-muted mb-0">Total Hours Worked</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card cyber-card">
+                <div class="card-body text-center">
+                    <div class="stat-icon">
+                        <i class="fas fa-dollar-sign fa-2x text-neon-green"></i>
+                    </div>
+                    <h5 class="mt-3 mb-1" id="total-earnings">$0</h5>
+                    <p class="text-muted mb-0">Total Earnings</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card cyber-card">
+                <div class="card-body text-center">
+                    <div class="stat-icon">
+                        <i class="fas fa-bug fa-2x text-neon-red"></i>
+                    </div>
+                    <h5 class="mt-3 mb-1" id="total-vulns">0</h5>
+                    <p class="text-muted mb-0">Vulnerabilities Found</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="col-md-3 mb-3">
+            <div class="card cyber-card">
+                <div class="card-body text-center">
+                    <div class="stat-icon">
+                        <i class="fas fa-calculator fa-2x text-neon-purple"></i>
+                    </div>
+                    <h5 class="mt-3 mb-1" id="hourly-rate">$0</h5>
+                    <p class="text-muted mb-0">Avg $/Hour</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Charts Row -->
+    <div class="row mb-4">
+        <!-- Daily Work Hours Chart -->
+        <div class="col-lg-6 mb-4">
+            <div class="card cyber-card">
+                <div class="card-header cyber-card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-bar text-neon-blue"></i>
+                        Daily Work Hours
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="dailyWorkChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Daily Earnings Chart -->
+        <div class="col-lg-6 mb-4">
+            <div class="card cyber-card">
+                <div class="card-header cyber-card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-line text-neon-green"></i>
+                        Daily Earnings
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="dailyEarningsChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Severity and Progress Row -->
+    <div class="row">
+        <!-- Vulnerability Severity Breakdown -->
+        <div class="col-lg-6 mb-4">
+            <div class="card cyber-card">
+                <div class="card-header cyber-card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-chart-pie text-neon-red"></i>
+                        Vulnerability Severity
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="severityChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Productivity Trends -->
+        <div class="col-lg-6 mb-4">
+            <div class="card cyber-card">
+                <div class="card-header cyber-card-header">
+                    <h5 class="mb-0">
+                        <i class="fas fa-trending-up text-neon-purple"></i>
+                        Productivity Insights
+                    </h5>
+                </div>
+                <div class="card-body">
+                    <div id="productivity-insights">
+                        <div class="insight-item">
+                            <i class="fas fa-trophy text-neon-gold"></i>
+                            <span>Loading insights...</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block scripts %}
+<script src="{{ url_for('static', filename='js/analytics.js') }}"></script>
+<script>
+let charts = {};
+
+async function loadAnalytics() {
+    const challengeId = document.getElementById('challengeSelect').value;
+    if (!challengeId) {
+        document.getElementById('analytics-content').style.display = 'none';
+        return;
+    }
+    
+    try {
+        const response = await fetch(`/api/analytics_data/${challengeId}`);
+        const data = await response.json();
+        
+        document.getElementById('analytics-content').style.display = 'block';
+        
+        // Update overview stats
+        updateOverviewStats(data);
+        
+        // Update charts
+        updateDailyWorkChart(data.daily_work);
+        updateDailyEarningsChart(data.daily_earnings);
+        updateSeverityChart(data.severity_counts);
+        updateProductivityInsights(data);
+        
+    } catch (error) {
+        console.error('Error loading analytics:', error);
+    }
+}
+
+function updateOverviewStats(data) {
+    const totalHours = Object.values(data.daily_work).reduce((sum, hours) => sum + hours, 0);
+    const totalEarnings = Object.values(data.daily_earnings).reduce((sum, earnings) => sum + earnings, 0);
+    const totalVulns = Object.values(data.severity_counts).reduce((sum, count) => sum + count, 0);
+    const hourlyRate = totalHours > 0 ? totalEarnings / totalHours : 0;
+    
+    document.getElementById('total-work-hours').textContent = totalHours.toFixed(1);
+    document.getElementById('total-earnings').textContent = `$${totalEarnings.toFixed(2)}`;
+    document.getElementById('total-vulns').textContent = totalVulns;
+    document.getElementById('hourly-rate').textContent = `$${hourlyRate.toFixed(2)}`;
+}
+
+function updateDailyWorkChart(dailyWork) {
+    const ctx = document.getElementById('dailyWorkChart').getContext('2d');
+    
+    if (charts.dailyWork) {
+        charts.dailyWork.destroy();
+    }
+    
+    const dates = Object.keys(dailyWork).sort();
+    const hours = dates.map(date => dailyWork[date]);
+    
+    charts.dailyWork = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: dates,
+            datasets: [{
+                label: 'Hours Worked',
+                data: hours,
+                backgroundColor: 'rgba(0, 255, 157, 0.3)',
+                borderColor: '#00ff9d',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#ffffff'
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: '#ffffff'
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: '#ffffff'
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateDailyEarningsChart(dailyEarnings) {
+    const ctx = document.getElementById('dailyEarningsChart').getContext('2d');
+    
+    if (charts.dailyEarnings) {
+        charts.dailyEarnings.destroy();
+    }
+    
+    const dates = Object.keys(dailyEarnings).sort();
+    const earnings = dates.map(date => dailyEarnings[date]);
+    
+    charts.dailyEarnings = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: dates,
+            datasets: [{
+                label: 'Earnings ($)',
+                data: earnings,
+                backgroundColor: 'rgba(0, 255, 255, 0.1)',
+                borderColor: '#00ffff',
+                borderWidth: 3,
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    labels: {
+                        color: '#ffffff'
+                    }
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    ticks: {
+                        color: '#ffffff',
+                        callback: function(value) {
+                            return '$' + value;
+                        }
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                },
+                x: {
+                    ticks: {
+                        color: '#ffffff'
+                    },
+                    grid: {
+                        color: 'rgba(255, 255, 255, 0.1)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateSeverityChart(severityCounts) {
+    const ctx = document.getElementById('severityChart').getContext('2d');
+    
+    if (charts.severity) {
+        charts.severity.destroy();
+    }
+    
+    const labels = Object.keys(severityCounts);
+    const data = Object.values(severityCounts);
+    
+    charts.severity = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: labels,
+            datasets: [{
+                data: data,
+                backgroundColor: [
+                    '#ff0040', // Critical - Red
+                    '#ff9500', // High - Orange
+                    '#00bfff', // Medium - Blue
+                    '#6c757d'  // Low - Gray
+                ],
+                borderColor: '#1a1a1a',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: {
+                        color: '#ffffff',
+                        padding: 20
+                    }
+                }
+            }
+        }
+    });
+}
+
+function updateProductivityInsights(data) {
+    const insights = [];
+    
+    const totalHours = Object.values(data.daily_work).reduce((sum, hours) => sum + hours, 0);
+    const totalDays = Object.keys(data.daily_work).length;
+    const avgHoursPerDay = totalDays > 0 ? totalHours / totalDays : 0;
+    
+    const totalEarnings = Object.values(data.daily_earnings).reduce((sum, earnings) => sum + earnings, 0);
+    const totalVulns = Object.values(data.severity_counts).reduce((sum, count) => sum + count, 0);
+    
+    if (avgHoursPerDay > 6) {
+        insights.push({
+            icon: 'fas fa-fire text-neon-red',
+            text: `Great dedication! Averaging ${avgHoursPerDay.toFixed(1)} hours per day`
+        });
+    }
+    
+    if (totalVulns > 0) {
+        const criticalCount = data.severity_counts.Critical || 0;
+        const criticalPercent = (criticalCount / totalVulns) * 100;
+        
+        if (criticalPercent > 20) {
+            insights.push({
+                icon: 'fas fa-exclamation-triangle text-neon-red',
+                text: `${criticalPercent.toFixed(0)}% of vulnerabilities are Critical severity`
+            });
+        }
+    }
+    
+    if (totalHours > 0 && totalEarnings > 0) {
+        const hourlyRate = totalEarnings / totalHours;
+        if (hourlyRate > 100) {
+            insights.push({
+                icon: 'fas fa-dollar-sign text-neon-green',
+                text: `Excellent earning rate: $${hourlyRate.toFixed(0)}/hour`
+            });
+        }
+    }
+    
+    if (insights.length === 0) {
+        insights.push({
+            icon: 'fas fa-chart-line text-neon-blue',
+            text: 'Keep working to unlock productivity insights!'
+        });
+    }
+    
+    const insightsHtml = insights.map(insight => 
+        `<div class="insight-item">
+            <i class="${insight.icon}"></i>
+            <span>${insight.text}</span>
+        </div>`
+    ).join('');
+    
+    document.getElementById('productivity-insights').innerHTML = insightsHtml;
+}
+</script>
+{% endblock %}
